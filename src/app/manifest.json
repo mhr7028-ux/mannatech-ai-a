@@ -1,0 +1,21 @@
+{
+  "name": "HBOS - 메나테크 AI 비즈니스 비서",
+  "short_name": "HBOS",
+  "description": "건강 데이터 기반 AI 네트워크 비즈니스 운영체제 (MannaTech AI Assistant)",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#0ea5e9",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
