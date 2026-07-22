@@ -1,11 +1,18 @@
 'use client';
 
-import { Stethoscope, FileText, CheckCircle2, AlertCircle, Sparkles, X, Check, Loader2, Share2, Printer, Upload, FileCode, FileCheck } from 'lucide-react';
+import { Stethoscope, FileText, CheckCircle2, AlertCircle, Sparkles, X, Check, Loader2, Share2, Printer, Upload, FileCode, FileCheck, UserPlus, Database } from 'lucide-react';
 import { useState } from 'react';
+import { addCustomer } from '@/lib/db/customers';
 
-export default function QuantumModule() {
+interface QuantumModuleProps {
+  userRole?: 'admin' | 'member';
+}
+
+export default function QuantumModule({ userRole = 'admin' }: QuantumModuleProps) {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [isSavingToCRM, setIsSavingToCRM] = useState<boolean>(false);
+  const [crmSaveSuccess, setCrmSaveSuccess] = useState<boolean>(false);
 
   // File Upload State
   const [attachedFile, setAttachedFile] = useState<{ name: string; content: string } | null>(null);
@@ -46,6 +53,30 @@ export default function QuantumModule() {
     ],
   });
 
+  // Save Quantum Report & Glyconutrient Stack directly to CRM Database
+  const handleSaveToCRM = async () => {
+    setIsSavingToCRM(true);
+    setCrmSaveSuccess(false);
+
+    try {
+      const productNames = report.recommendedProducts.map((p: any) => p.name).join(', ');
+      await addCustomer({
+        name: report.customerName,
+        phone: '010-1234-5678',
+        goal: `양자검사 종합케어 (${productNames})`,
+        status: '양자검사 완료 / 추천 스택 제시',
+        notes: `[양자검사 경고]: ${report.warnings.map((w: any) => w.name).join(', ')}\n[글리코 처방]: ${productNames}`,
+      });
+
+      setCrmSaveSuccess(true);
+      setTimeout(() => setCrmSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error('Save to CRM error:', err);
+    } finally {
+      setIsSavingToCRM(false);
+    }
+  };
+
   // Handle Drag & Drop / File Selection (.html, .pdf, .txt)
   const handleFileUpload = (file: File) => {
     if (!file) return;
@@ -65,11 +96,9 @@ export default function QuantumModule() {
       setRawTextData(`[첨부 파일: ${file.name}]\n고객 성함: ${extractedName}\n\n${content ? content.slice(0, 500) + '...' : 'PDF 양자 바이오 파동 수치 데이터가 포함되어 있습니다.'}`);
     };
 
-    // Read HTML or TXT files as text
     if (file.name.endsWith('.html') || file.name.endsWith('.htm') || file.name.endsWith('.txt')) {
       reader.readAsText(file);
     } else {
-      // For PDF or other binary files, record the filename
       setAttachedFile({
         name: file.name,
         content: `PDF 파일: ${file.name}`,
@@ -96,7 +125,6 @@ export default function QuantumModule() {
     setIsAnalyzing(true);
 
     setTimeout(() => {
-      // Extract Customer Name
       const fileName = attachedFile ? attachedFile.name : '';
       const nameFromFileName = fileName.split('_')[0];
       const custName = nameFromFileName && nameFromFileName.length <= 4 ? nameFromFileName : '장원술';
@@ -152,7 +180,7 @@ export default function QuantumModule() {
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white font-semibold px-4 py-2.5 rounded-xl shadow-xs transition-colors text-sm"
+          className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white font-semibold px-4 py-2.5 rounded-xl shadow-xs transition-colors text-sm cursor-pointer"
         >
           <Upload size={18} />
           HTML / PDF 파일 드래그 및 첨부하기
@@ -174,16 +202,36 @@ export default function QuantumModule() {
             <p className="text-xs text-gray-400 mt-0.5">분석일: {report.date} | {report.rawSummary}</p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {/* 1-Click Save to CRM Button */}
+            <button
+              onClick={handleSaveToCRM}
+              disabled={isSavingToCRM}
+              className={`flex items-center gap-1.5 px-3.5 py-2 font-semibold text-xs rounded-xl transition-all cursor-pointer ${
+                crmSaveSuccess
+                  ? 'bg-emerald-500 text-white border border-emerald-600'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+              }`}
+            >
+              {isSavingToCRM ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : crmSaveSuccess ? (
+                <Check size={14} />
+              ) : (
+                <Database size={14} />
+              )}
+              <span>{crmSaveSuccess ? 'CRM 고객 DB에 저장 완료!' : '1-Click CRM에 저장'}</span>
+            </button>
+
             <button
               onClick={() => alert(`${report.customerName} 고객님에게 전송할 카카오톡 리포트 링크가 생성되었습니다!`)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 text-amber-800 font-semibold text-xs rounded-xl border border-amber-200 hover:bg-amber-100 transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 text-amber-800 font-semibold text-xs rounded-xl border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer"
             >
               <Share2 size={14} /> 카카오톡 전송
             </button>
             <button
               onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-gray-100 text-gray-700 font-semibold text-xs rounded-xl hover:bg-gray-200 transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-gray-100 text-gray-700 font-semibold text-xs rounded-xl hover:bg-gray-200 transition-colors cursor-pointer"
             >
               <Printer size={14} /> 리포트 출력
             </button>
@@ -252,7 +300,7 @@ export default function QuantumModule() {
                 <FileCode className="text-sky-500" size={20} />
                 <h3 className="text-lg font-bold text-gray-900">양자검사 파일 (HTML, PDF) 드래그 및 첨부</h3>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-full">
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-full cursor-pointer">
                 <X size={20} />
               </button>
             </div>
@@ -310,14 +358,14 @@ export default function QuantumModule() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-3 border border-gray-200 text-gray-600 font-semibold rounded-xl text-xs"
+                  className="flex-1 py-3 border border-gray-200 text-gray-600 font-semibold rounded-xl text-xs cursor-pointer"
                 >
                   취소
                 </button>
                 <button
                   type="submit"
                   disabled={isAnalyzing || (!attachedFile && !rawTextData.trim())}
-                  className="flex-1 py-3 bg-sky-500 hover:bg-sky-600 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs disabled:opacity-40"
+                  className="flex-1 py-3 bg-sky-500 hover:bg-sky-600 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs disabled:opacity-40 cursor-pointer"
                 >
                   {isAnalyzing ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
                   AI 파일 자동 분석 & 리포트 생성

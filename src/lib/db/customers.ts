@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 export interface CustomerData {
   id?: string;
@@ -30,17 +30,14 @@ const timeout = (ms: number) => new Promise((_, reject) => setTimeout(() => reje
 export async function addCustomer(customer: Omit<CustomerData, 'id'>): Promise<CustomerData> {
   const newLocalCustomer = { id: String(Date.now()), ...customer };
 
-  // Check if real Firebase keys are set up
   const isFirebaseConfigured = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID && process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID !== 'demo-app';
 
   if (!isFirebaseConfigured) {
-    // Instantly save to local memory if Firebase keys aren't added yet
     localCustomersCache.unshift(newLocalCustomer);
     return newLocalCustomer;
   }
 
   try {
-    // Race Firestore addDoc against a 1.5s timeout to prevent hanging UI
     const docRef: any = await Promise.race([
       addDoc(collection(db, 'customers'), {
         ...customer,
@@ -56,6 +53,42 @@ export async function addCustomer(customer: Omit<CustomerData, 'id'>): Promise<C
     console.warn('Firestore write timed out or failed. Saved to local cache:', error);
     localCustomersCache.unshift(newLocalCustomer);
     return newLocalCustomer;
+  }
+}
+
+/**
+ * Update existing customer data
+ */
+export async function updateCustomer(id: string, updatedData: Partial<CustomerData>): Promise<void> {
+  // Update local cache first for instant UI responsiveness
+  localCustomersCache = localCustomersCache.map((c) => (c.id === id ? { ...c, ...updatedData } : c));
+
+  const isFirebaseConfigured = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID && process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID !== 'demo-app';
+  if (!isFirebaseConfigured) return;
+
+  try {
+    const customerRef = doc(db, 'customers', id);
+    await Promise.race([updateDoc(customerRef, updatedData), timeout(1500)]);
+  } catch (error) {
+    console.warn('Firestore update fallback to local cache:', error);
+  }
+}
+
+/**
+ * Delete a customer from database
+ */
+export async function deleteCustomer(id: string): Promise<void> {
+  // Delete from local cache
+  localCustomersCache = localCustomersCache.filter((c) => c.id !== id);
+
+  const isFirebaseConfigured = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID && process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID !== 'demo-app';
+  if (!isFirebaseConfigured) return;
+
+  try {
+    const customerRef = doc(db, 'customers', id);
+    await Promise.race([deleteDoc(customerRef), timeout(1500)]);
+  } catch (error) {
+    console.warn('Firestore delete fallback to local cache:', error);
   }
 }
 

@@ -23,15 +23,18 @@ export default function Home() {
   // AI Model Selection state
   const [selectedModel, setSelectedModel] = useState<string>('gpt-4o');
 
+  // User Role State ('admin' | 'member')
+  const [userRole, setUserRole] = useState<'admin' | 'member'>('admin');
+
   // Render module based on activeTab
   const renderModule = () => {
     switch (activeTab) {
       case 'crm':
-        return <CRMModule />;
+        return <CRMModule userRole={userRole} />;
       case 'health':
         return <HealthModule />;
       case 'quantum':
-        return <QuantumModule />;
+        return <QuantumModule userRole={userRole} />;
       case 'physiognomy':
         return <PhysiognomyModule />;
       case 'knowledge':
@@ -41,7 +44,7 @@ export default function Home() {
       case 'schedule':
         return <ScheduleModule />;
       case 'network':
-        return <NetworkModule />;
+        return <NetworkModule userRole={userRole} />;
       case 'chat':
       default:
         return <AIChatModule selectedModel={selectedModel} />;
@@ -61,13 +64,13 @@ export default function Home() {
 
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+          className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
         >
           {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
       </header>
 
-      {/* 1. Desktop & Mobile Sidebar Component (with integrated bottom STT & Google Auth) */}
+      {/* 1. Desktop & Mobile Sidebar Component */}
       <div
         className={`fixed md:relative inset-y-0 left-0 z-40 transform md:transform-none transition-transform duration-300 ease-in-out ${
           isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
@@ -81,6 +84,8 @@ export default function Home() {
           }}
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
+          userRole={userRole}
+          setUserRole={setUserRole}
         />
       </div>
 

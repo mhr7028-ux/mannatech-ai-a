@@ -1,13 +1,16 @@
 'use client';
 
-import { BrainCircuit, User, Activity, Stethoscope, Sparkles, BookOpen, Briefcase, CalendarDays, Network, Mic, LogIn, LogOut } from 'lucide-react';
+import { BrainCircuit, User, Activity, Stethoscope, Sparkles, BookOpen, Briefcase, CalendarDays, Network, Mic, LogIn, LogOut, ShieldCheck, UserCheck, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useSession, signIn, signOut } from 'next-auth/react';
+import { useState } from 'react';
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   selectedModel: string;
   setSelectedModel: (model: string) => void;
+  userRole?: 'admin' | 'member';
+  setUserRole?: (role: 'admin' | 'member') => void;
 }
 
 export default function Sidebar({
@@ -15,32 +18,78 @@ export default function Sidebar({
   setActiveTab,
   selectedModel,
   setSelectedModel,
+  userRole = 'admin',
+  setUserRole,
 }: SidebarProps) {
   const { data: session } = useSession();
+  const [internalRole, setInternalRole] = useState<'admin' | 'member'>('admin');
+
+  const currentRole = userRole || (session?.user as any)?.role || internalRole;
+
+  const handleToggleRole = () => {
+    const nextRole = currentRole === 'admin' ? 'member' : 'admin';
+    setInternalRole(nextRole);
+    if (setUserRole) setUserRole(nextRole);
+  };
 
   const navItems = [
-    { id: 'chat', label: 'AI 건강 코치 & 비서', icon: BrainCircuit },
-    { id: 'crm', label: '고객 관리 (CRM)', icon: User },
-    { id: 'health', label: '건강 기록', icon: Activity },
-    { id: 'quantum', label: '양자 검사 분석', icon: Stethoscope },
-    { id: 'physiognomy', label: '관상 아이스브레이킹', icon: Sparkles },
-    { id: 'knowledge', label: '지식 관리 창고', icon: BookOpen },
-    { id: 'business', label: 'AI 마케팅 & 사업 비서', icon: Briefcase },
-    { id: 'schedule', label: '스마트 일정 관리', icon: CalendarDays },
-    { id: 'network', label: '조직도 & PV 수당 관리', icon: Network },
+    { id: 'chat', label: 'AI 건강 코치 & 비서', icon: BrainCircuit, adminOnly: false },
+    { id: 'crm', label: '고객 관리 (CRM)', icon: User, adminOnly: false },
+    { id: 'health', label: '건강 기록', icon: Activity, adminOnly: false },
+    { id: 'quantum', label: '양자 검사 분석', icon: Stethoscope, adminOnly: false },
+    { id: 'physiognomy', label: '관상 아이스브레이킹', icon: Sparkles, adminOnly: false },
+    { id: 'knowledge', label: '지식 관리 창고', icon: BookOpen, adminOnly: false },
+    { id: 'business', label: 'AI 마케팅 & 사업 비서', icon: Briefcase, adminOnly: false },
+    { id: 'schedule', label: '스마트 일정 관리', icon: CalendarDays, adminOnly: false },
+    { id: 'network', label: '조직도 & PV 수당 관리', icon: Network, adminOnly: false },
   ];
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-full shrink-0">
       {/* App Branding */}
-      <div className="p-6 border-b border-gray-100 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center text-white font-bold text-xl shadow-sm">
-          H
+      <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center text-white font-bold text-xl shadow-sm">
+            H
+          </div>
+          <div>
+            <h1 className="font-bold text-gray-900 leading-tight text-lg">HBOS</h1>
+            <p className="text-xs text-gray-500 font-medium">MannaTech AI System</p>
+          </div>
         </div>
-        <div>
-          <h1 className="font-bold text-gray-900 leading-tight text-lg">HBOS</h1>
-          <p className="text-xs text-gray-500 font-medium">MannaTech AI System</p>
-        </div>
+
+        {/* Role Badge */}
+        <span
+          className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide flex items-center gap-1 ${
+            currentRole === 'admin'
+              ? 'bg-amber-100 text-amber-800 border border-amber-200'
+              : 'bg-sky-100 text-sky-800 border border-sky-200'
+          }`}
+        >
+          {currentRole === 'admin' ? <ShieldCheck size={11} /> : <UserCheck size={11} />}
+          {currentRole === 'admin' ? '최고 관리자' : '파트너 회원'}
+        </span>
+      </div>
+
+      {/* Role Switching Quick Bar (Dev & Testing Toggle) */}
+      <div className="px-4 py-2 bg-slate-50 border-b border-gray-100 flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-gray-500">모드 스위처</span>
+        <button
+          onClick={handleToggleRole}
+          className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-100 shadow-2xs transition-all cursor-pointer"
+        >
+          {currentRole === 'admin' ? (
+            <>
+              <ToggleRight size={16} className="text-amber-500" />
+              <span>👑 관리자 뷰</span>
+            </>
+          ) : (
+            <>
+              <ToggleLeft size={16} className="text-sky-500" />
+              <span>👤 파트너 뷰</span>
+            </>
+          )}
+        </button>
       </div>
 
       {/* Navigation Menu */}
@@ -56,14 +105,21 @@ export default function Sidebar({
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
                   isActive
                     ? 'bg-sky-50 text-sky-600 font-semibold shadow-xs'
                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`}
               >
-                <Icon size={18} className={isActive ? 'text-sky-600' : 'text-gray-400'} />
-                <span>{item.label}</span>
+                <div className="flex items-center gap-3">
+                  <Icon size={18} className={isActive ? 'text-sky-600' : 'text-gray-400'} />
+                  <span>{item.label}</span>
+                </div>
+                {item.id === 'network' && currentRole === 'admin' && (
+                  <span className="text-[9px] bg-amber-50 text-amber-700 font-bold px-1.5 py-0.5 rounded border border-amber-200">
+                    전체
+                  </span>
+                )}
               </button>
             );
           })}
@@ -82,11 +138,9 @@ export default function Sidebar({
             <option value="gpt-4o">OpenAI (GPT-4o)</option>
             <option value="gemini-1.5-pro">Google (Gemini 1.5 Pro)</option>
             <option value="claude-3-5-sonnet">Anthropic (Claude 3.5)</option>
-            <option value="ollama-qwen2.5:0.5b">Ollama (🟢 초고속 설치됨 Qwen 2.5)</option>
+            <option value="ollama-qwen2.5:0.5b">Ollama (🟢 초고속 Qwen 2.5)</option>
             <option value="ollama-qwen3.6">Ollama (무료 Qwen 3.6)</option>
             <option value="ollama-gemma4:12b">Ollama (무료 Gemma4 12B)</option>
-            <option value="ollama-kimi-k2.7-code:cloud">Ollama (Kimi K2.7 Code)</option>
-            <option value="ollama-glm-5.2:cloud">Ollama (GLM 5.2 Cloud)</option>
             <option value="ollama-llama3">Ollama (무료 Llama 3)</option>
           </select>
           <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">
@@ -100,7 +154,7 @@ export default function Sidebar({
         {/* STT Status Badge */}
         <div className="w-full py-2 px-3 bg-sky-50/80 border border-sky-100 rounded-xl flex items-center justify-center gap-2 text-sky-700 font-semibold text-[11px]">
           <Mic size={14} className="text-sky-500 animate-pulse shrink-0" />
-          <span>실시간 음성(STT) 연동</span>
+          <span>실시간 무중단 음성(STT) 연동</span>
         </div>
 
         {/* Google Authentication & Profile Box */}
@@ -129,7 +183,7 @@ export default function Sidebar({
           </div>
         ) : (
           <button
-            onClick={() => signIn('google-demo', { redirect: false })}
+            onClick={() => signIn('google', { callbackUrl: '/' })}
             className="w-full py-2.5 bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
           >
             <LogIn size={15} />

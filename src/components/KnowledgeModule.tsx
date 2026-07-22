@@ -1,6 +1,6 @@
 'use client';
 
-import { Search, BookOpen, FileText, Video, ExternalLink, Bookmark, Filter, X, Check, Plus } from 'lucide-react';
+import { Search, BookOpen, FileText, Video, ExternalLink, Bookmark, Filter, X, Check, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 export default function KnowledgeModule() {
@@ -95,6 +95,13 @@ export default function KnowledgeModule() {
     });
   };
 
+  // Delete Knowledge Item
+  const handleDeleteItem = (id: string) => {
+    if (confirm('이 지식 자료를 목록에서 삭제하시겠습니까?')) {
+      setKnowledgeItems((prev) => prev.filter((item) => item.id !== id));
+    }
+  };
+
   // Filter items
   const filteredItems = knowledgeItems.filter((item) => {
     const matchesSearch =
@@ -116,12 +123,12 @@ export default function KnowledgeModule() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">지식 관리 창고 (Knowledge Base)</h2>
           <p className="text-sm text-gray-500 mt-1">
-            독서 모임 자료, 건강 논문, 요약본, 유튜브 강의 자료를 한곳에 모으고 AI가 통합 검색합니다.
+            독서 모임 자료, 건강 논문, 요약본, 유튜브 강의 자료를 한곳에 모으고 관리합니다.
           </p>
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white font-semibold px-4 py-2.5 rounded-xl shadow-xs text-sm transition-colors"
+          className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white font-semibold px-4 py-2.5 rounded-xl shadow-xs text-sm transition-colors cursor-pointer"
         >
           <BookOpen size={18} />
           새 자료/영상 등록
@@ -146,7 +153,7 @@ export default function KnowledgeModule() {
           <Filter size={14} className="text-gray-400" />
           <button
             onClick={() => setSelectedCategory('all')}
-            className={`px-3 py-1 text-xs font-semibold rounded-full border transition-all ${
+            className={`px-3 py-1 text-xs font-semibold rounded-full border transition-all cursor-pointer ${
               selectedCategory === 'all'
                 ? 'bg-sky-500 text-white border-sky-500'
                 : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
@@ -156,7 +163,7 @@ export default function KnowledgeModule() {
           </button>
           <button
             onClick={() => setSelectedCategory('book')}
-            className={`px-3 py-1 text-xs font-semibold rounded-full border transition-all ${
+            className={`px-3 py-1 text-xs font-semibold rounded-full border transition-all cursor-pointer ${
               selectedCategory === 'book'
                 ? 'bg-sky-500 text-white border-sky-500'
                 : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
@@ -166,7 +173,7 @@ export default function KnowledgeModule() {
           </button>
           <button
             onClick={() => setSelectedCategory('paper')}
-            className={`px-3 py-1 text-xs font-semibold rounded-full border transition-all ${
+            className={`px-3 py-1 text-xs font-semibold rounded-full border transition-all cursor-pointer ${
               selectedCategory === 'paper'
                 ? 'bg-sky-500 text-white border-sky-500'
                 : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
@@ -176,7 +183,7 @@ export default function KnowledgeModule() {
           </button>
           <button
             onClick={() => setSelectedCategory('youtube')}
-            className={`px-3 py-1 text-xs font-semibold rounded-full border transition-all ${
+            className={`px-3 py-1 text-xs font-semibold rounded-full border transition-all cursor-pointer ${
               selectedCategory === 'youtube'
                 ? 'bg-sky-500 text-white border-sky-500'
                 : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
@@ -202,7 +209,13 @@ export default function KnowledgeModule() {
                   {item.type === 'youtube' && <Video size={14} className="text-red-500" />}
                   {item.category}
                 </span>
-                <Bookmark size={16} className="text-gray-300 hover:text-sky-500 cursor-pointer" />
+                <button
+                  onClick={() => handleDeleteItem(item.id)}
+                  className="p-1 text-gray-300 hover:text-red-500 transition-colors cursor-pointer"
+                  title="자료 삭제"
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
 
               <h3 className="text-base font-bold text-gray-900 leading-snug mb-2 hover:text-sky-600 cursor-pointer">
@@ -221,7 +234,7 @@ export default function KnowledgeModule() {
             </div>
 
             <div className="pt-4 border-t border-gray-100 flex items-center justify-between text-xs">
-              <span className="text-gray-400 font-medium">AI 자동 검색 등록됨</span>
+              <span className="text-gray-400 font-medium">등록 완료</span>
               <a
                 href={item.link}
                 target="_blank"
@@ -246,7 +259,7 @@ export default function KnowledgeModule() {
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 cursor-pointer"
               >
                 <X size={20} />
               </button>
@@ -279,10 +292,10 @@ export default function KnowledgeModule() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">핵심 설명 및 요약 메모</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">상세 설명</label>
                 <textarea
                   rows={3}
-                  placeholder="예: 앰브로토스와 트루퓨어를 병용했을 때 간 해독 효과 설명..."
+                  placeholder="자료의 핵심 내용을 입력하세요..."
                   value={formData.desc}
                   onChange={(e) => setFormData({ ...formData, desc: e.target.value })}
                   className="w-full p-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sky-500"
@@ -293,20 +306,9 @@ export default function KnowledgeModule() {
                 <label className="block text-xs font-bold text-gray-700 mb-1">태그 (쉼표로 구분)</label>
                 <input
                   type="text"
-                  placeholder="예: 간해독, 앰브로토스, 장건강"
+                  placeholder="디톡스, 메나테크, 장건강"
                   value={formData.tags}
                   onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-                  className="w-full p-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sky-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">유튜브 또는 PDF 링크 (URL)</label>
-                <input
-                  type="text"
-                  placeholder="https://youtube.com/watch?v=..."
-                  value={formData.link}
-                  onChange={(e) => setFormData({ ...formData, link: e.target.value })}
                   className="w-full p-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sky-500"
                 />
               </div>
@@ -315,16 +317,16 @@ export default function KnowledgeModule() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-3 border border-gray-200 text-gray-600 font-semibold rounded-xl text-xs hover:bg-gray-50"
+                  className="flex-1 py-3 border border-gray-200 text-gray-600 font-semibold rounded-xl text-xs hover:bg-gray-50 cursor-pointer"
                 >
                   취소
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 bg-sky-500 hover:bg-sky-600 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs"
+                  className="flex-1 py-3 bg-sky-500 hover:bg-sky-600 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer"
                 >
                   <Check size={16} />
-                  자료 등록하기
+                  자료 저장하기
                 </button>
               </div>
             </form>
