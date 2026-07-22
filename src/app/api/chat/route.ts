@@ -16,49 +16,71 @@ export async function POST(req: Request) {
 
     // 1. Direct Local Ollama Handling (tries 127.0.0.1 and localhost)
     if (model?.startsWith('ollama-') || model === 'llama3') {
-      const localModelName = model.startsWith('ollama-') ? model.replace('ollama-', '') : 'qwen3.6';
+      let targetModel = model.startsWith('ollama-') ? model.replace('ollama-', '') : 'qwen3.6';
 
-      // Check endpoints: 127.0.0.1 and localhost
       const endpoints = [
-        'http://127.0.0.1:11434/api/chat',
-        'http://localhost:11434/api/chat',
+        'http://127.0.0.1:11434',
+        'http://localhost:11434',
       ];
 
-      let ollamaRes: Response | null = null;
-      let lastErr: any = null;
+      let activeBaseUrl: string | null = null;
+      let availableModels: string[] = [];
 
-      for (const endpoint of endpoints) {
+      // Step A: Find active Ollama base URL and installed model tags
+      for (const base of endpoints) {
         try {
-          ollamaRes = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: localModelName,
-              messages: [
-                { role: 'system', content: systemPrompt },
-                ...messages.map((m: any) => ({
-                  role: m.role,
-                  content: m.content,
-                  images: m.image ? [m.image.split(',')[1] || m.image] : undefined,
-                })),
-              ],
-              stream: true,
-            }),
-          });
-          if (ollamaRes.ok) break;
-        } catch (e) {
-          lastErr = e;
+          const tagsRes = await fetch(`${base}/api/tags`);
+          if (tagsRes.ok) {
+            const data = await tagsRes.json();
+            availableModels = (data.models || []).map((m: any) => m.name);
+            activeBaseUrl = base;
+            break;
+          }
+        } catch {}
+      }
+
+      // If exact model not matched, pick closest installed model
+      if (availableModels.length > 0) {
+        const exactMatch = availableModels.find(
+          (m) => m === targetModel || m.startsWith(targetModel) || targetModel.startsWith(m.split(':')[0])
+        );
+        if (exactMatch) {
+          targetModel = exactMatch;
+        } else {
+          targetModel = availableModels[0]; // fallback to first installed model
         }
       }
 
-      if (!ollamaRes || !ollamaRes.ok) {
-        console.error('Ollama connection failed:', lastErr);
+      if (!activeBaseUrl) {
         return new Response(
-          `🤖 **올라마 AI 연결 상태 안내**:\n\n` +
-          `대표님 컴퓨터에 윈도우 올라마 프로그램이 구동 중입니다만, **[${localModelName}]** 모델이 로딩 준비 중이거나 다운로드 중일 수 있습니다.\n\n` +
-          `💡 **해결 방법**:\n` +
-          `1️⃣ 왼쪽 윈도우 올라마 앱 창에서 \`${localModelName}\` 모델에 첫 인사("안녕")를 한 번 보내주시면 모델이 메모리에 즉시 올라갑니다.\n` +
-          `2️⃣ 또는 HBOS 드롭다운에서 다른 로컬 모델(예: \`Ollama (무료 Qwen 3.6)\`)을 선택해 보셔요!`,
+          `🔴 **올라마 AI 미실행 상태**:\n` +
+          `대표님 컴퓨터에 윈도우 올라마 프로그램이 켜져 있는지 확인해 주세요!`,
+          { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+        );
+      }
+
+      // Step B: Send chat/generate request to Ollama
+      const ollamaRes = await fetch(`${activeBaseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: targetModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...messages.map((m: any) => ({
+              role: m.role,
+              content: m.content,
+              images: m.image ? [m.image.split(',')[1] || m.image] : undefined,
+            })),
+          ],
+          stream: true,
+        }),
+      });
+
+      if (!ollamaRes.ok) {
+        return new Response(
+          `🤖 **올라마 모델 [${targetModel}] 로딩 안내**:\n` +
+          `윈도우 올라마 앱 창에서 해당 모델에 대화를 한 번 시도해 주시면 즉시 가동됩니다!`,
           { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
         );
       }
@@ -87,7 +109,7 @@ export async function POST(req: Request) {
                     controller.enqueue(encoder.encode(parsed.message.content));
                   }
                 } catch {
-                  // Ignore incomplete JSON chunks
+                  // Ignore partial JSON chunks
                 }
               }
             }
