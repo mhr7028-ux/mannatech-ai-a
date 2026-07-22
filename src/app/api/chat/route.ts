@@ -24,7 +24,7 @@ export async function POST(req: Request) {
 
     // Route to the correct provider based on the selected model string
     if (model?.startsWith('ollama-')) {
-      // Dynamic routing for any local Ollama model (e.g. ollama-qwen3.6 -> qwen3.6)
+      // Dynamic routing for any local Ollama model (e.g. ollama-gemma4:12b -> gemma4:12b)
       const localModelName = model.replace('ollama-', '');
       aiModel = ollama(localModelName);
     } else {
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
       system: systemPrompt,
     });
 
-    return (result as any).toDataStreamResponse();
+    return (result as any).toTextStreamResponse();
   } catch (error) {
     console.error('AI API Error:', error);
     return new Response(JSON.stringify({ error: 'Failed to communicate with AI provider.' }), {

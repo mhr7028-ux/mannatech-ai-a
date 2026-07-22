@@ -29,7 +29,7 @@ export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
     }
   }, []);
 
-  // Handle Form Submission with Real-time Streaming Response
+  // Handle Form Submission with Real Raw Streaming Response
   const onCustomSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const textToSend = inputVal.trim();
@@ -77,20 +77,7 @@ export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
         const { done, value } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
-        
-        // Next.js data stream protocol formatting or raw text chunk
-        const lines = chunk.split('\n');
-        for (const line of lines) {
-          if (line.startsWith('0:')) {
-            try {
-              assistantText += JSON.parse(line.slice(2));
-            } catch {
-              assistantText += line.slice(2);
-            }
-          } else if (!line.startsWith('d:') && !line.startsWith('e:') && line.trim()) {
-            assistantText += line.replace(/^[0-9]+:"/, '').replace(/"$/, '');
-          }
-        }
+        assistantText += chunk;
 
         setMessages((prev) =>
           prev.map((m) => (m.id === assistantMsgId ? { ...m, content: assistantText } : m))
@@ -98,16 +85,15 @@ export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
       }
     } catch (err) {
       console.error('Chat error:', err);
-      // Friendly fallback response for demonstration/Ollama guide
-      const fallbackMsg: ChatMessage = {
+      const errorMsg: ChatMessage = {
         id: (Date.now() + 2).toString(),
         role: 'assistant',
-        content: `네, 대표님! [${selectedModel}] 두뇌로 요청하신 질문 ("${textToSend}")에 대한 답변입니다.\n\n` +
-          `💡 **상담 가이드**: 만약 올라마(Ollama) 모델을 선택하신 경우, 대표님 PC의 윈도우 올라마 프로그램에서 해당 모델이 가동 중인지 확인해 주세요.\n` +
-          `1️⃣ **간 해독 수치 조언**: 글리코 영양소(앰브로토스) 및 트루퓨어 간 해독 솔루션을 우선 권장합니다.\n` +
-          `2️⃣ **섭취 가이드**: 아침/저녁 식전 30분 미온수와 함께 섭취하도록 안내해 주세요.`,
+        content: `⚠️ [${selectedModel}] AI 모델 연결 오류가 발생했습니다.\n\n` +
+          `💡 **원인 및 해결 방법**:\n` +
+          `1️⃣ **올라마(Ollama) 모델인 경우**: 윈도우 올라마 프로그램에서 \`${selectedModel.replace('ollama-', '')}\` 모델이 활성화되어 있는지 확인해 주세요.\n` +
+          `2️⃣ **클라우드 모델(GPT/Gemini/Claude)인 경우**: API 키 설정 상태를 확인해 주세요.`,
       };
-      setMessages((prev) => [...prev.filter((m) => m.content.trim() !== ''), fallbackMsg]);
+      setMessages((prev) => [...prev.filter((m) => m.content.trim() !== ''), errorMsg]);
     } finally {
       setIsLoading(false);
     }
@@ -161,7 +147,6 @@ export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
     };
 
     recognition.onend = () => {
-      // If user didn't manually stop, keep continuous listening active
       if (isListening) {
         try {
           recognition.start();
