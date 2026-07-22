@@ -9,12 +9,34 @@ interface AIChatModuleProps {
 }
 
 export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
-  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput } = (useChat as any)({
+  // Input State
+  const [inputVal, setInputVal] = useState<string>('');
+
+  const chatHelpers = (useChat as any)({
     api: '/api/chat',
     body: {
       model: selectedModel,
     },
-  });
+  } as any);
+
+  const messages = chatHelpers.messages || [];
+  const isLoading = chatHelpers.isLoading || false;
+
+  // Handle Form Submission
+  const onCustomSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputVal.trim() || isLoading) return;
+
+    if (chatHelpers.append) {
+      chatHelpers.append({
+        role: 'user',
+        content: inputVal,
+      });
+    } else if (chatHelpers.handleSubmit) {
+      chatHelpers.handleSubmit(e, { data: { input: inputVal } });
+    }
+    setInputVal('');
+  };
 
   // Speech to Text (STT) State
   const [isListening, setIsListening] = useState<boolean>(false);
@@ -46,7 +68,7 @@ export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
         const transcript = Array.from(event.results)
           .map((result: any) => result[0].transcript)
           .join('');
-        setInput(transcript);
+        setInputVal(transcript);
       };
 
       recognition.onerror = () => {
@@ -87,9 +109,7 @@ export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
             <div className="w-full space-y-2">
               <button
                 onClick={() =>
-                  handleInputChange({
-                    target: { value: '오늘 만나는 장원술 고객님 간 해독 지수 3.42 나온 거 맞춤 상담 포인트 정리해줘.' },
-                  } as any)
+                  setInputVal('오늘 만나는 장원술 고객님 간 해독 지수 3.42 나온 거 맞춤 상담 포인트 정리해줘.')
                 }
                 className="w-full text-left p-3 bg-white border border-gray-200 rounded-xl text-xs text-gray-700 hover:border-sky-300 hover:bg-sky-50/50 transition-all shadow-2xs"
               >
@@ -97,9 +117,7 @@ export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
               </button>
               <button
                 onClick={() =>
-                  handleInputChange({
-                    target: { value: '양자검사에서 간 기능 저하가 나왔을 때 추천할 메나테크 제품은?' },
-                  } as any)
+                  setInputVal('양자검사에서 간 기능 저하가 나왔을 때 추천할 메나테크 제품은?')
                 }
                 className="w-full text-left p-3 bg-white border border-gray-200 rounded-xl text-xs text-gray-700 hover:border-sky-300 hover:bg-sky-50/50 transition-all shadow-2xs"
               >
@@ -110,7 +128,7 @@ export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
         ) : (
           messages.map((m: any) => (
             <div
-              key={m.id}
+              key={m.id || Math.random().toString()}
               className={`flex gap-3 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               {m.role !== 'user' && (
@@ -160,7 +178,7 @@ export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
 
       {/* Input Form with Voice STT Button */}
       <div className="p-4 bg-white border-t border-gray-200 shrink-0">
-        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto relative flex items-center gap-2">
+        <form onSubmit={onCustomSubmit} className="max-w-4xl mx-auto relative flex items-center gap-2">
           {/* Mic Button */}
           <button
             type="button"
@@ -177,8 +195,9 @@ export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
 
           <div className="relative flex-1">
             <input
-              value={input || ''}
-              onChange={(e) => handleInputChange(e)}
+              type="text"
+              value={inputVal}
+              onChange={(e) => setInputVal(e.target.value)}
               placeholder={isListening ? '말씀하시는 내용을 듣고 있습니다...' : '건강 상담 비서에게 질문을 입력하거나 마이크로 말씀하세요...'}
               className={`w-full px-4 py-3 pr-12 rounded-xl border text-sm shadow-xs transition-colors ${
                 isListening ? 'border-red-400 bg-red-50/30' : 'border-gray-300 focus:border-sky-500'
@@ -187,7 +206,7 @@ export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
             />
             <button
               type="submit"
-              disabled={isLoading || !(input || '').trim()}
+              disabled={isLoading || !inputVal.trim()}
               className="absolute right-2 top-2 w-8 h-8 flex items-center justify-center bg-sky-500 text-white rounded-lg hover:bg-sky-600 disabled:opacity-40 transition-colors"
             >
               <Send size={15} />
