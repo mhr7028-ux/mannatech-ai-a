@@ -82,6 +82,7 @@ export default function Sidebar({
             <option value="gpt-4o">OpenAI (GPT-4o)</option>
             <option value="gemini-1.5-pro">Google (Gemini 1.5 Pro)</option>
             <option value="claude-3-5-sonnet">Anthropic (Claude 3.5)</option>
+            <option value="ollama-qwen2.5:0.5b">Ollama (🟢 초고속 설치됨 Qwen 2.5)</option>
             <option value="ollama-qwen3.6">Ollama (무료 Qwen 3.6)</option>
             <option value="ollama-gemma4:12b">Ollama (무료 Gemma4 12B)</option>
             <option value="ollama-kimi-k2.7-code:cloud">Ollama (Kimi K2.7 Code)</option>
