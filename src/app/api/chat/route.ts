@@ -1,13 +1,7 @@
 import { openai } from '@ai-sdk/openai';
 import { google } from '@ai-sdk/google';
 import { anthropic } from '@ai-sdk/anthropic';
-import { createOllama } from 'ollama-ai-provider';
 import { streamText } from 'ai';
-
-// Initialize Ollama pointing to localhost
-const ollama = createOllama({
-  baseURL: 'http://localhost:11434/api',
-});
 
 // System prompt that sets the persona for HBOS AI
 const systemPrompt = `당신은 'MannaTech AI Business Assistant (HBOS)'입니다.
@@ -20,29 +14,87 @@ export async function POST(req: Request) {
   try {
     const { messages, model } = await req.json();
 
-    let aiModel: any;
+    // 1. Direct Local Ollama Handling (e.g. ollama-gemma4:12b, ollama-qwen3.6)
+    if (model?.startsWith('ollama-') || model === 'llama3') {
+      const localModelName = model.startsWith('ollama-') ? model.replace('ollama-', '') : 'qwen3.6';
 
-    // Route to the correct provider based on the selected model string
-    if (model?.startsWith('ollama-')) {
-      // Dynamic routing for any local Ollama model (e.g. ollama-gemma4:12b -> gemma4:12b)
-      const localModelName = model.replace('ollama-', '');
-      aiModel = ollama(localModelName);
-    } else {
-      switch (model) {
-        case 'gpt-4o':
-          aiModel = openai('gpt-4o');
-          break;
-        case 'gemini-1.5-pro':
-          aiModel = google('models/gemini-1.5-pro-latest');
-          break;
-        case 'claude-3-5-sonnet':
-          aiModel = anthropic('claude-3-5-sonnet-20240620');
-          break;
-        case 'llama3':
-        default:
-          aiModel = ollama('qwen3.6');
-          break;
+      try {
+        const ollamaRes = await fetch('http://localhost:11434/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: localModelName,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              ...messages,
+            ],
+            stream: true,
+          }),
+        });
+
+        if (!ollamaRes.ok) {
+          throw new Error(`Ollama server error: ${ollamaRes.statusText}`);
+        }
+
+        // Transform Ollama NDJSON stream to clean text stream
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder();
+        const reader = ollamaRes.body?.getReader();
+
+        const customStream = new ReadableStream({
+          async start(controller) {
+            if (!reader) {
+              controller.close();
+              return;
+            }
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              const chunk = decoder.decode(value, { stream: true });
+              const lines = chunk.split('\n');
+              for (const line of lines) {
+                if (line.trim()) {
+                  try {
+                    const parsed = JSON.parse(line);
+                    if (parsed.message?.content) {
+                      controller.enqueue(encoder.encode(parsed.message.content));
+                    }
+                  } catch {
+                    // Ignore partial json chunks
+                  }
+                }
+              }
+            }
+            controller.close();
+          },
+        });
+
+        return new Response(customStream, {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
+      } catch (ollamaErr) {
+        console.error('Ollama connection failed:', ollamaErr);
+        return new Response(
+          `💡 **올라마 모델 [${model.replace('ollama-', '')}] 연결 가이드**:\n` +
+          `대표님 컴퓨터의 윈도우 올라마 프로그램에서 \`${model.replace('ollama-', '')}\` 모델을 가동해 주시면 즉시 응답합니다!`,
+          { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+        );
       }
+    }
+
+    // 2. Cloud AI Models (GPT-4o, Gemini 1.5 Pro, Claude 3.5)
+    let aiModel: any;
+    switch (model) {
+      case 'gpt-4o':
+        aiModel = openai('gpt-4o');
+        break;
+      case 'gemini-1.5-pro':
+        aiModel = google('models/gemini-1.5-pro-latest');
+        break;
+      case 'claude-3-5-sonnet':
+      default:
+        aiModel = anthropic('claude-3-5-sonnet-20240620');
+        break;
     }
 
     const result = await streamText({
@@ -54,9 +106,6 @@ export async function POST(req: Request) {
     return (result as any).toTextStreamResponse();
   } catch (error) {
     console.error('AI API Error:', error);
-    return new Response(JSON.stringify({ error: 'Failed to communicate with AI provider.' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response('AI 서비스 연결 중 오류가 발생했습니다.', { status: 500 });
   }
 }
