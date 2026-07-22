@@ -23,21 +23,26 @@ export async function POST(req: Request) {
     let aiModel: any;
 
     // Route to the correct provider based on the selected model string
-    switch (model) {
-      case 'gpt-4o':
-        aiModel = openai('gpt-4o');
-        break;
-      case 'gemini-1.5-pro':
-        aiModel = google('models/gemini-1.5-pro-latest');
-        break;
-      case 'claude-3-5-sonnet':
-        aiModel = anthropic('claude-3-5-sonnet-20240620');
-        break;
-      case 'llama3':
-      default:
-        // For local Ollama models (e.g. llama3)
-        aiModel = ollama('llama3');
-        break;
+    if (model?.startsWith('ollama-')) {
+      // Dynamic routing for any local Ollama model (e.g. ollama-qwen3.6 -> qwen3.6)
+      const localModelName = model.replace('ollama-', '');
+      aiModel = ollama(localModelName);
+    } else {
+      switch (model) {
+        case 'gpt-4o':
+          aiModel = openai('gpt-4o');
+          break;
+        case 'gemini-1.5-pro':
+          aiModel = google('models/gemini-1.5-pro-latest');
+          break;
+        case 'claude-3-5-sonnet':
+          aiModel = anthropic('claude-3-5-sonnet-20240620');
+          break;
+        case 'llama3':
+        default:
+          aiModel = ollama('qwen3.6');
+          break;
+      }
     }
 
     const result = await streamText({

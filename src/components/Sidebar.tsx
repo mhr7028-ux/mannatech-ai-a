@@ -82,7 +82,11 @@ export default function Sidebar({
             <option value="gpt-4o">OpenAI (GPT-4o)</option>
             <option value="gemini-1.5-pro">Google (Gemini 1.5 Pro)</option>
             <option value="claude-3-5-sonnet">Anthropic (Claude 3.5)</option>
-            <option value="llama3">Ollama (무료 로컬 Llama 3)</option>
+            <option value="ollama-qwen3.6">Ollama (무료 Qwen 3.6)</option>
+            <option value="ollama-gemma4:12b">Ollama (무료 Gemma4 12B)</option>
+            <option value="ollama-kimi-k2.7-code:cloud">Ollama (Kimi K2.7 Code)</option>
+            <option value="ollama-glm-5.2:cloud">Ollama (GLM 5.2 Cloud)</option>
+            <option value="ollama-llama3">Ollama (무료 Llama 3)</option>
           </select>
           <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">
             💡 토큰 절약을 위해 집에서는 <span className="font-semibold text-gray-600">Ollama</span>를 사용하세요.
