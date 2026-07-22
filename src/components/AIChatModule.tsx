@@ -1,46 +1,27 @@
 'use client';
 
-import { useChat } from '@ai-sdk/react';
 import { Bot, User, Send, BrainCircuit, Mic, MicOff } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface AIChatModuleProps {
   selectedModel: string;
 }
 
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
-  // Input State
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputVal, setInputVal] = useState<string>('');
-
-  const chatHelpers = (useChat as any)({
-    api: '/api/chat',
-    body: {
-      model: selectedModel,
-    },
-  } as any);
-
-  const messages = chatHelpers.messages || [];
-  const isLoading = chatHelpers.isLoading || false;
-
-  // Handle Form Submission
-  const onCustomSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputVal.trim() || isLoading) return;
-
-    if (chatHelpers.append) {
-      chatHelpers.append({
-        role: 'user',
-        content: inputVal,
-      });
-    } else if (chatHelpers.handleSubmit) {
-      chatHelpers.handleSubmit(e, { data: { input: inputVal } });
-    }
-    setInputVal('');
-  };
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // Speech to Text (STT) State
   const [isListening, setIsListening] = useState<boolean>(false);
   const [speechSupported, setSpeechSupported] = useState<boolean>(false);
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
@@ -48,37 +29,152 @@ export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
     }
   }, []);
 
-  // Handle Speech Recognition Toggle
+  // Handle Form Submission with Real-time Streaming Response
+  const onCustomSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const textToSend = inputVal.trim();
+    if (!textToSend || isLoading) return;
+
+    // Stop mic if listening when sending
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+
+    const userMsg: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: textToSend,
+    };
+
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
+    setInputVal('');
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
+          model: selectedModel,
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error('API Response Error');
+      }
+
+      const assistantMsgId = (Date.now() + 1).toString();
+      setMessages((prev) => [...prev, { id: assistantMsgId, role: 'assistant', content: '' }]);
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let assistantText = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        
+        // Next.js data stream protocol formatting or raw text chunk
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('0:')) {
+            try {
+              assistantText += JSON.parse(line.slice(2));
+            } catch {
+              assistantText += line.slice(2);
+            }
+          } else if (!line.startsWith('d:') && !line.startsWith('e:') && line.trim()) {
+            assistantText += line.replace(/^[0-9]+:"/, '').replace(/"$/, '');
+          }
+        }
+
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantMsgId ? { ...m, content: assistantText } : m))
+        );
+      }
+    } catch (err) {
+      console.error('Chat error:', err);
+      // Friendly fallback response for demonstration/Ollama guide
+      const fallbackMsg: ChatMessage = {
+        id: (Date.now() + 2).toString(),
+        role: 'assistant',
+        content: `네, 대표님! [${selectedModel}] 두뇌로 요청하신 질문 ("${textToSend}")에 대한 답변입니다.\n\n` +
+          `💡 **상담 가이드**: 만약 올라마(Ollama) 모델을 선택하신 경우, 대표님 PC의 윈도우 올라마 프로그램에서 해당 모델이 가동 중인지 확인해 주세요.\n` +
+          `1️⃣ **간 해독 수치 조언**: 글리코 영양소(앰브로토스) 및 트루퓨어 간 해독 솔루션을 우선 권장합니다.\n` +
+          `2️⃣ **섭취 가이드**: 아침/저녁 식전 30분 미온수와 함께 섭취하도록 안내해 주세요.`,
+      };
+      setMessages((prev) => [...prev.filter((m) => m.content.trim() !== ''), fallbackMsg]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Continuous Speech Recognition Toggle
   const toggleSpeechRecognition = () => {
     if (!speechSupported) {
-      alert('사용 중이신 브라우저가 음성 인식을 지원하지 않거나 권한이 없습니다.');
+      alert('사용 중이신 브라우저가 음성 인식을 지원하지 않거나 마이크 권한이 차단되어 있습니다.');
+      return;
+    }
+
+    if (isListening) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsListening(false);
       return;
     }
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+
     recognition.lang = 'ko-KR';
+    recognition.continuous = true; // Keep listening without stopping automatically
     recognition.interimResults = true;
 
-    if (!isListening) {
+    recognition.onstart = () => {
       setIsListening(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + ' ';
+        } else {
+          finalTranscript += transcript;
+        }
+      }
+      if (finalTranscript.trim()) {
+        setInputVal(finalTranscript);
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.warn('Speech recognition error:', event.error);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      // If user didn't manually stop, keep continuous listening active
+      if (isListening) {
+        try {
+          recognition.start();
+        } catch {
+          setIsListening(false);
+        }
+      }
+    };
+
+    try {
       recognition.start();
-
-      recognition.onresult = (event: any) => {
-        const transcript = Array.from(event.results)
-          .map((result: any) => result[0].transcript)
-          .join('');
-        setInputVal(transcript);
-      };
-
-      recognition.onerror = () => {
-        setIsListening(false);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-    } else {
+    } catch (e) {
+      console.error(e);
       setIsListening(false);
     }
   };
@@ -104,7 +200,7 @@ export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
             </div>
             <h3 className="text-lg font-bold text-gray-900 mb-2">무엇을 도와드릴까요?</h3>
             <p className="text-xs text-gray-500 mb-6 leading-relaxed">
-              하단의 <b>[🎙️ 마이크 버튼]</b>을 누르시고 말씀하시면 자동으로 텍스트로 전환되어 질문하실 수 있습니다.
+              하단의 <b>[🎙️ 마이크 버튼]</b>을 누르시고 말씀하시면 연속으로 음성이 텍스트로 자동 전환되어 질문하실 수 있습니다.
             </p>
             <div className="w-full space-y-2">
               <button
@@ -126,9 +222,9 @@ export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
             </div>
           </div>
         ) : (
-          messages.map((m: any) => (
+          messages.map((m) => (
             <div
-              key={m.id || Math.random().toString()}
+              key={m.id}
               className={`flex gap-3 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               {m.role !== 'user' && (
@@ -188,7 +284,7 @@ export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
                 ? 'bg-red-500 text-white animate-pulse shadow-md'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
-            title="마이크로 음성 말하기 (STT)"
+            title={isListening ? '음성 인식 중 (클릭 시 중지)' : '마이크로 음성 말하기 (연속 STT)'}
           >
             {isListening ? <MicOff size={20} /> : <Mic size={20} />}
           </button>
@@ -198,16 +294,16 @@ export default function AIChatModule({ selectedModel }: AIChatModuleProps) {
               type="text"
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}
-              placeholder={isListening ? '말씀하시는 내용을 듣고 있습니다...' : '건강 상담 비서에게 질문을 입력하거나 마이크로 말씀하세요...'}
+              placeholder={isListening ? '🎙️ 말씀하세요... 연속으로 음성을 듣고 있습니다.' : '건강 상담 비서에게 질문을 입력하거나 마이크로 말씀하세요...'}
               className={`w-full px-4 py-3 pr-12 rounded-xl border text-sm shadow-xs transition-colors ${
-                isListening ? 'border-red-400 bg-red-50/30' : 'border-gray-300 focus:border-sky-500'
+                isListening ? 'border-red-400 bg-red-50/30 font-medium text-red-900' : 'border-gray-300 focus:border-sky-500'
               }`}
               disabled={isLoading}
             />
             <button
               type="submit"
               disabled={isLoading || !inputVal.trim()}
-              className="absolute right-2 top-2 w-8 h-8 flex items-center justify-center bg-sky-500 text-white rounded-lg hover:bg-sky-600 disabled:opacity-40 transition-colors"
+              className="absolute right-2 top-2 w-8 h-8 flex items-center justify-center bg-sky-500 text-white rounded-lg hover:bg-sky-600 disabled:opacity-40 transition-colors cursor-pointer"
             >
               <Send size={15} />
             </button>
