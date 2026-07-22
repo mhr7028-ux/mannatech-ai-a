@@ -12,77 +12,96 @@ const systemPrompt = `당신은 'MannaTech AI Business Assistant (HBOS)'입니�
 
 export async function POST(req: Request) {
   try {
-    const { messages, model } = await req.json();
+    const { messages, model, image } = await req.json();
 
-    // 1. Direct Local Ollama Handling (e.g. ollama-gemma4:12b, ollama-qwen3.6)
+    // 1. Direct Local Ollama Handling (tries 127.0.0.1 and localhost)
     if (model?.startsWith('ollama-') || model === 'llama3') {
       const localModelName = model.startsWith('ollama-') ? model.replace('ollama-', '') : 'qwen3.6';
 
-      try {
-        const ollamaRes = await fetch('http://localhost:11434/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: localModelName,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              ...messages,
-            ],
-            stream: true,
-          }),
-        });
+      // Check endpoints: 127.0.0.1 and localhost
+      const endpoints = [
+        'http://127.0.0.1:11434/api/chat',
+        'http://localhost:11434/api/chat',
+      ];
 
-        if (!ollamaRes.ok) {
-          throw new Error(`Ollama server error: ${ollamaRes.statusText}`);
+      let ollamaRes: Response | null = null;
+      let lastErr: any = null;
+
+      for (const endpoint of endpoints) {
+        try {
+          ollamaRes = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: localModelName,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                ...messages.map((m: any) => ({
+                  role: m.role,
+                  content: m.content,
+                  images: m.image ? [m.image.split(',')[1] || m.image] : undefined,
+                })),
+              ],
+              stream: true,
+            }),
+          });
+          if (ollamaRes.ok) break;
+        } catch (e) {
+          lastErr = e;
         }
+      }
 
-        // Transform Ollama NDJSON stream to clean text stream
-        const encoder = new TextEncoder();
-        const decoder = new TextDecoder();
-        const reader = ollamaRes.body?.getReader();
-
-        const customStream = new ReadableStream({
-          async start(controller) {
-            if (!reader) {
-              controller.close();
-              return;
-            }
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              const chunk = decoder.decode(value, { stream: true });
-              const lines = chunk.split('\n');
-              for (const line of lines) {
-                if (line.trim()) {
-                  try {
-                    const parsed = JSON.parse(line);
-                    if (parsed.message?.content) {
-                      controller.enqueue(encoder.encode(parsed.message.content));
-                    }
-                  } catch {
-                    // Ignore partial json chunks
-                  }
-                }
-              }
-            }
-            controller.close();
-          },
-        });
-
-        return new Response(customStream, {
-          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-        });
-      } catch (ollamaErr) {
-        console.error('Ollama connection failed:', ollamaErr);
+      if (!ollamaRes || !ollamaRes.ok) {
+        console.error('Ollama connection failed:', lastErr);
         return new Response(
-          `💡 **올라마 모델 [${model.replace('ollama-', '')}] 연결 가이드**:\n` +
-          `대표님 컴퓨터의 윈도우 올라마 프로그램에서 \`${model.replace('ollama-', '')}\` 모델을 가동해 주시면 즉시 응답합니다!`,
+          `🤖 **올라마 AI 연결 상태 안내**:\n\n` +
+          `대표님 컴퓨터에 윈도우 올라마 프로그램이 구동 중입니다만, **[${localModelName}]** 모델이 로딩 준비 중이거나 다운로드 중일 수 있습니다.\n\n` +
+          `💡 **해결 방법**:\n` +
+          `1️⃣ 왼쪽 윈도우 올라마 앱 창에서 \`${localModelName}\` 모델에 첫 인사("안녕")를 한 번 보내주시면 모델이 메모리에 즉시 올라갑니다.\n` +
+          `2️⃣ 또는 HBOS 드롭다운에서 다른 로컬 모델(예: \`Ollama (무료 Qwen 3.6)\`)을 선택해 보셔요!`,
           { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
         );
       }
+
+      // Stream response cleanly
+      const encoder = new TextEncoder();
+      const decoder = new TextDecoder();
+      const reader = ollamaRes.body?.getReader();
+
+      const customStream = new ReadableStream({
+        async start(controller) {
+          if (!reader) {
+            controller.close();
+            return;
+          }
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+              if (line.trim()) {
+                try {
+                  const parsed = JSON.parse(line);
+                  if (parsed.message?.content) {
+                    controller.enqueue(encoder.encode(parsed.message.content));
+                  }
+                } catch {
+                  // Ignore incomplete JSON chunks
+                }
+              }
+            }
+          }
+          controller.close();
+        },
+      });
+
+      return new Response(customStream, {
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
     }
 
-    // 2. Cloud AI Models (GPT-4o, Gemini 1.5 Pro, Claude 3.5)
+    // 2. Cloud AI Models (GPT-4o, Gemini, Claude)
     let aiModel: any;
     switch (model) {
       case 'gpt-4o':
